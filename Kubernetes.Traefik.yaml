@@ -1,0 +1,139 @@
+kind: Deployment
+apiVersion: apps/v1beta2
+metadata:
+  name: letsgo-deployment
+  labels:
+    app: letsgo
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: letsgo
+  template:
+    metadata:
+      labels:
+        app: letsgo
+    spec:	
+      containers:
+      - name: letsgo
+        image: peterdeme/letsgo:v1
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 5000
+        livenessProbe:
+         periodSeconds: 3
+         httpGet:
+          path: "/"
+          port: 5000
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: letsgo-service
+spec:
+  type: LoadBalancer
+  selector:
+    app: letsgo
+  ports:
+    - port: 5000
+      targetPort: 5000	
+      protocol: TCP
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: letsgo-ingress
+  annotations:
+    kubernetes.io/ingress.class: traefik
+spec:
+  rules:
+    - http:
+       paths:
+       - path: "/"
+         backend:
+          serviceName: letsgo-service
+          servicePort: 5000
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  name: traefik-sds-role
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - services
+      - endpoints
+      - secrets
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - extensions
+    resources:
+      - ingresses
+    verbs:
+      - get
+      - list
+      - watch
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  name: traefik-sds-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: traefik-sds-role
+subjects:
+- kind: ServiceAccount
+  name: traefik-sd-account
+  namespace: kube-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: traefik-sd-account
+  namespace: kube-system
+---
+kind: Deployment
+apiVersion: extensions/v1beta1
+metadata:
+  name: traefik-deployment
+  namespace: kube-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      k8s-app: traefik-ingress-lb
+  template: 
+    metadata:
+      labels:
+        k8s-app: traefik-ingress-lb
+        name: traefik-ingress-lb
+    spec:
+      serviceAccountName: traefik-sd-account
+      containers:
+      - image: traefik
+        name: traefik-lb-container
+        args:
+        - --web
+        - --kubernetes
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: traefik-ingress-service
+  namespace: kube-system
+spec:
+  selector:
+    k8s-app: traefik-ingress-lb
+  ports:
+    - protocol: TCP
+      port: 80
+      name: web
+    - protocol: TCP
+      port: 8080
+      name: admin
+  type: NodePort

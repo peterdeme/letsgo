@@ -1,0 +1,40 @@
+kind: Deployment
+apiVersion: apps/v1beta2
+metadata:
+  name: letsgo-deployment
+  labels:
+    app: letsgo
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: letsgo
+  template:
+    metadata:
+      labels:
+        app: letsgo
+    spec:
+      containers:
+      - name: letsgo
+        image: peterdeme/letsgo:v1
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 5000
+        livenessProbe:
+         periodSeconds: 3
+         httpGet:
+          path: "/"
+          port: 5000         
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: letsgo-service
+spec:
+  type: LoadBalancer
+  selector:
+    app: letsgo
+  ports:
+    - port: 5000
+      targetPort: 5000	
+      protocol: TCP
